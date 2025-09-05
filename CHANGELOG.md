@@ -1,3 +1,6 @@
+## [1.4.4]
+* Adds message headers to the web socket transport
+
 ## [1.4.3]  
 * Fixed WebSocket authorization issue on Web platform.
 
