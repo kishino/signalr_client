@@ -18,6 +18,7 @@ class WebSocketTransport implements ITransport {
   final Logger? _logger;
   final AccessTokenFactory? _accessTokenFactory;
   final bool _logMessageContent;
+  final bool _skipCertificateValidation;
   WebSocketChannel? _webSocket;
   StreamSubscription<Object?>? _webSocketListenSub;
   MessageHeaders? _headers;
@@ -30,11 +31,13 @@ class WebSocketTransport implements ITransport {
 
   // Methods
   WebSocketTransport(AccessTokenFactory? accessTokenFactory, Logger? logger,
-      bool logMessageContent, MessageHeaders? headers)
+      bool logMessageContent, MessageHeaders? headers,
+      {bool skipCertificateValidation = false})
       : _accessTokenFactory = accessTokenFactory,
         _logger = logger,
         _logMessageContent = logMessageContent,
-        _headers = headers;
+        _headers = headers,
+        _skipCertificateValidation = skipCertificateValidation;
 
   @override
   Future<void> connect(String? url, TransferFormat transferFormat) async {
@@ -67,8 +70,18 @@ class WebSocketTransport implements ITransport {
       if (kIsWeb) {
         _webSocket = WebSocketChannel.connect(Uri.parse(url));
       } else {
-        final webSocket = await io.WebSocket.connect(url, headers: headers);
-        _webSocket = IOWebSocketChannel(webSocket);
+        if (_skipCertificateValidation) {
+          // Create an HttpClient that skips certificate validation
+          final httpClient = io.HttpClient();
+          httpClient.badCertificateCallback =
+              (io.X509Certificate cert, String host, int port) => true;
+          // Use IOWebSocketChannel.connect with custom HttpClient
+          _webSocket = IOWebSocketChannel.connect(Uri.parse(url),
+              customClient: httpClient, headers: headers);
+        } else {
+          final webSocket = await io.WebSocket.connect(url, headers: headers);
+          _webSocket = IOWebSocketChannel(webSocket);
+        }
       }
       opened = true;
       if (!websocketCompleter.isCompleted) websocketCompleter.complete();

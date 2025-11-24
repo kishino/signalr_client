@@ -1,25 +1,30 @@
 import 'dart:async';
-import 'package:http/http.dart';
+import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'package:signalr_netcore/ihub_protocol.dart';
 import 'errors.dart';
 import 'signalr_http_client.dart';
 import 'utils.dart';
 import 'package:logging/logging.dart';
 
-typedef OnHttpClientCreateCallback = void Function(Client httpClient);
+typedef OnHttpClientCreateCallback = void Function(http.Client httpClient);
 
 class WebSupportingHttpClient extends SignalRHttpClient {
   // Properties
 
   final Logger? _logger;
   final OnHttpClientCreateCallback? _httpClientCreateCallback;
+  final bool _skipCertificateValidation;
 
   // Methods
 
   WebSupportingHttpClient(Logger? logger,
-      {OnHttpClientCreateCallback? httpClientCreateCallback})
+      {OnHttpClientCreateCallback? httpClientCreateCallback,
+      bool skipCertificateValidation = false})
       : this._logger = logger,
-        this._httpClientCreateCallback = httpClientCreateCallback;
+        this._httpClientCreateCallback = httpClientCreateCallback,
+        this._skipCertificateValidation = skipCertificateValidation;
 
   Future<SignalRHttpResponse> send(SignalRHttpRequest request) {
     // Check that abort was not signaled before calling send
@@ -38,7 +43,17 @@ class WebSupportingHttpClient extends SignalRHttpClient {
     return Future<SignalRHttpResponse>(() async {
       final uri = Uri.parse(request.url!);
 
-      final httpClient = Client();
+      http.Client httpClient;
+      if (_skipCertificateValidation) {
+        // Create an HttpClient that skips certificate validation
+        final ioClient = HttpClient();
+        ioClient.badCertificateCallback =
+            (X509Certificate cert, String host, int port) => true;
+        httpClient = IOClient(ioClient);
+      } else {
+        httpClient = http.Client();
+      }
+
       if (_httpClientCreateCallback != null) {
         _httpClientCreateCallback!(httpClient);
       }
@@ -73,7 +88,7 @@ class WebSupportingHttpClient extends SignalRHttpClient {
 
       final httpRespFuture = await Future.any(
           [_sendHttpRequest(httpClient, request, uri, headers), abortFuture]);
-      final httpResp = httpRespFuture as Response;
+      final httpResp = httpRespFuture as http.Response;
 
       if (request.abortSignal != null) {
         request.abortSignal!.onabort = null;
@@ -103,13 +118,13 @@ class WebSupportingHttpClient extends SignalRHttpClient {
     });
   }
 
-  Future<Response> _sendHttpRequest(
-    Client httpClient,
+  Future<http.Response> _sendHttpRequest(
+    http.Client httpClient,
     SignalRHttpRequest request,
     Uri uri,
     MessageHeaders headers,
   ) {
-    Future<Response> httpResponse;
+    Future<http.Response> httpResponse;
 
     switch (request.method!.toLowerCase()) {
       case 'post':

@@ -232,7 +232,9 @@ class HttpConnection implements IConnection {
     baseUrl = url;
 
     _options = options;
-    _httpClient = options.httpClient ?? WebSupportingHttpClient(_logger);
+    _httpClient = options.httpClient ??
+        WebSupportingHttpClient(_logger,
+            skipCertificateValidation: options.skipCertificateValidation);
     _connectionState = ConnectionState.Disconnected;
     _connectionStarted = false;
   }
@@ -555,8 +557,9 @@ class HttpConnection implements IConnection {
   ITransport _constructTransport(HttpTransportType transport) {
     switch (transport) {
       case HttpTransportType.WebSockets:
-        return WebSocketTransport(
-            _accessTokenFactory, _logger, _options.logMessageContent, _options.headers);
+        return WebSocketTransport(_accessTokenFactory, _logger,
+            _options.logMessageContent, _options.headers,
+            skipCertificateValidation: _options.skipCertificateValidation);
       case HttpTransportType.ServerSentEvents:
         return new ServerSentEventsTransport(_httpClient, _accessTokenFactory,
             _logger, _options.logMessageContent);
